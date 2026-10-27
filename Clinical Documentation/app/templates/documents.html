@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Documents — ClinDoc AI</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+{% include "_sidebar.html" %}
+
+<div class="main-content">
+  <header class="top-header">
+    <h2>Clinical Documents</h2>
+    <a href="/new-document" class="btn btn-primary btn-sm">+ New Document</a>
+    <div class="header-user">
+      <div class="avatar">DR</div>
+      <span>Dr. Admin</span>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- ── Filter Bar ────────────────────────────────────────────────── -->
+    <div class="filter-bar">
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input class="form-control" id="search-input" type="text" placeholder="Search patient, diagnosis, title…"/>
+      </div>
+      <select class="form-control" id="filter-status" style="width:150px">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="validated">Validated</option>
+        <option value="review">Under Review</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <select class="form-control" id="filter-dept" style="width:180px">
+        <option value="">All Departments</option>
+        <option>Cardiology</option><option>Neurology</option>
+        <option>Orthopedics</option><option>Oncology</option>
+        <option>Emergency</option><option>Pediatrics</option>
+        <option>Radiology</option><option>General Medicine</option>
+      </select>
+      <select class="form-control" id="filter-type" style="width:170px">
+        <option value="">All Types</option>
+        <option>Discharge Summary</option><option>Prescription</option>
+        <option>Lab Report</option><option>Radiology Report</option>
+        <option>Surgical Note</option><option>Progress Note</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="btn-clear">Clear</button>
+    </div>
+
+    <!-- ── Documents Table ──────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">All Documents</span>
+        <span id="doc-count" class="text-muted text-sm"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Doc ID</th><th>Patient</th><th>Department</th>
+              <th>Type</th><th>Diagnosis</th><th>Status</th>
+              <th>AI Score</th><th>Date</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="docs-tbody">
+            <tr><td colspan="9" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="pagination" style="padding:16px 20px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Document Detail Modal ──────────────────────────────────────────────── -->
+<div class="modal-overlay" id="doc-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Document Detail</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('doc-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <div class="spinner"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('doc-modal')">Close</button>
+      <button class="btn btn-primary" id="modal-validate-btn">🤖 Run AI Validation</button>
+      <button class="btn btn-danger btn-sm" id="modal-delete-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="/static/js/utils.js"></script>
+<script>
+  let currentPage = 1;
+  let activeDocId = null;
+
+  async function loadDocs(page = 1) {
+    currentPage = page;
+    const search = document.getElementById("search-input").value;
+    const status = document.getElementById("filter-status").value;
+    const dept   = document.getElementById("filter-dept").value;
+    const type   = document.getElementById("filter-type").value;
+
+    let url = `/api/documents?page=${page}&per_page=12`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (status) url += `&status=${status}`;
+    if (dept)   url += `&department=${encodeURIComponent(dept)}`;
+    if (type)   url += `&doc_type=${encodeURIComponent(type)}`;
+
+    const tbody = document.getElementById("docs-tbody");
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>`;
+
+    try {
+      const data = await api("GET", url);
+      document.getElementById("doc-count").textContent = `${data.total} document(s)`;
+
+      if (!data.data.length) {
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">
+          <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          </svg>
+          <h3>No documents found</h3>
+          <p>Try adjusting your filters</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.data.map(d => `
+        <tr style="cursor:pointer" onclick="openDoc(${d.id})">
+          <td><strong style="color:var(--primary)">${d.doc_id}</strong></td>
+          <td>${d.patient_name}</td>
+          <td><span class="text-muted">${d.department}</span></td>
+          <td>${d.doc_type}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.diagnosis}">${d.diagnosis}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td>${scoreBar(d.ai_score)}</td>
+          <td class="text-muted text-sm">${fmtDate(d.created_at)}</td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openDoc(${d.id})">View</button>
+          </td>
+        </tr>`).join("");
+
+      renderPagination(document.getElementById("pagination"), data.page, data.pages, loadDocs);
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><h3>${e.message}</h3></div></td></tr>`;
+    }
+  }
+
+  async function openDoc(id) {
+    activeDocId = id;
+    openModal("doc-modal");
+    document.getElementById("modal-body").innerHTML = spinnerHTML();
+    try {
+      const doc = await api("GET", `/api/documents/${id}`);
+      document.getElementById("modal-title").textContent = `${doc.doc_id} — ${doc.title}`;
+
+      const issueList = doc.issues.length
+        ? doc.issues.map(i => `
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+              ${severityBadge(i.severity)}
+              <div>
+                <div class="fw-600" style="font-size:12px;text-transform:capitalize">${i.issue_type.replace(/_/g," ")}</div>
+                <div class="text-muted text-sm">${i.description}</div>
+              </div>
+              ${!i.resolved ? `<button class="btn btn-success btn-sm" style="margin-left:auto;white-space:nowrap" onclick="resolveIssue(${i.id})">Resolve</button>` : `<span class="badge badge-validated" style="margin-left:auto">Resolved</span>`}
+            </div>`).join("")
+        : `<div class="text-muted text-sm">No issues found — document is clean ✓</div>`;
+
+      document.getElementById("modal-body").innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div><div class="text-muted text-sm">Patient</div><div class="fw-600">${doc.patient_name}</div></div>
+          <div><div class="text-muted text-sm">Doctor</div><div class="fw-600">${doc.doctor_name}</div></div>
+          <div><div class="text-muted text-sm">Type</div><div>${doc.doc_type}</div></div>
+          <div><div class="text-muted text-sm">Department</div><div>${doc.department}</div></div>
+          <div><div class="text-muted text-sm">ICD-10 Code</div><div><code style="background:#f0f4ff;padding:2px 6px;border-radius:4px">${doc.icd_codes}</code></div></div>
+          <div><div class="text-muted text-sm">Status</div><div>${statusBadge(doc.status)}</div></div>
+        </div>
+
+        <div class="form-group">
+          <div class="form-label">Diagnosis</div>
+          <div style="padding:8px;background:var(--bg);border-radius:6px">${doc.diagnosis}</div>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Medications</div>
+          <div style="padding:8px;background:var(--bg);border-radius:6px;font-size:13px">${doc.medications}</div>
+        </div>
+        <div class="form-group">
+          <div class="form-label">Clinical Notes</div>
+          <div style="padding:10px;background:var(--bg);border-radius:6px;font-size:13px;white-space:pre-wrap;max-height:150px;overflow-y:auto">${doc.content}</div>
+        </div>
+
+        ${doc.ai_summary ? `
+        <div class="ai-panel">
+          <div class="ai-panel-title">🤖 AI Analysis — Score: ${doc.ai_score}/100</div>
+          <p>${doc.ai_summary}</p>
+        </div>` : `<div class="text-muted text-sm" style="padding:8px">Document has not been AI-validated yet. Click "Run AI Validation" to analyse.</div>`}
+
+        <div style="margin-top:16px">
+          <div class="form-label">Validation Issues (${doc.issues.length})</div>
+          <div>${issueList}</div>
+        </div>`;
+    } catch(e) {
+      document.getElementById("modal-body").innerHTML = `<div class="empty-state"><h3>${e.message}</h3></div>`;
+    }
+  }
+
+  document.getElementById("modal-validate-btn").addEventListener("click", async () => {
+    if (!activeDocId) return;
+    const btn = document.getElementById("modal-validate-btn");
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spinner" style="width:14px;height:14px"></div> Analysing…`;
+    try {
+      const result = await api("POST", `/api/documents/${activeDocId}/validate`);
+      showToast(`Validation complete! Score: ${result.ai_score}/100 — Engine: ${result.engine}`, "success");
+      openDoc(activeDocId);
+      loadDocs(currentPage);
+    } catch(e) {
+      showToast("Validation failed: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = "🤖 Run AI Validation";
+    }
+  });
+
+  document.getElementById("modal-delete-btn").addEventListener("click", async () => {
+    if (!activeDocId) return;
+    if (!confirm("Delete this document? This cannot be undone.")) return;
+    try {
+      await api("DELETE", `/api/documents/${activeDocId}`);
+      closeModal("doc-modal");
+      showToast("Document deleted", "warning");
+      loadDocs(currentPage);
+    } catch(e) {
+      showToast("Delete failed: " + e.message, "error");
+    }
+  });
+
+  async function resolveIssue(issueId) {
+    try {
+      await api("PATCH", `/api/issues/${issueId}/resolve`);
+      showToast("Issue marked as resolved", "success");
+      openDoc(activeDocId);
+    } catch(e) {
+      showToast("Failed to resolve issue", "error");
+    }
+  }
+
+  // Debounced search
+  let searchTimer;
+  document.getElementById("search-input").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadDocs(1), 350);
+  });
+  document.getElementById("filter-status").addEventListener("change", () => loadDocs(1));
+  document.getElementById("filter-dept").addEventListener("change",   () => loadDocs(1));
+  document.getElementById("filter-type").addEventListener("change",   () => loadDocs(1));
+  document.getElementById("btn-clear").addEventListener("click", () => {
+    document.getElementById("search-input").value = "";
+    document.getElementById("filter-status").value = "";
+    document.getElementById("filter-dept").value   = "";
+    document.getElementById("filter-type").value   = "";
+    loadDocs(1);
+  });
+
+  loadDocs();
+</script>
+</body>
+</html>

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Patients — ClinDoc AI</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+{% include "_sidebar.html" %}
+
+<div class="main-content">
+  <header class="top-header">
+    <h2>Patient Registry</h2>
+    <span class="header-badge blue" id="pt-total-badge">Loading…</span>
+    <div class="header-user">
+      <div class="avatar">DR</div>
+      <span>Dr. Admin</span>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- ── Summary Cards ─────────────────────────────────────────────── -->
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px">
+      <div class="stat-card"><div class="stat-icon blue">👤</div><div><div class="stat-label">Total Patients</div><div class="stat-value" id="sc-total">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon blue">♂</div><div><div class="stat-label">Male</div><div class="stat-value" id="sc-male">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon red">♀</div><div><div class="stat-label">Female</div><div class="stat-value" id="sc-female">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon orange">📋</div><div><div class="stat-label">Avg Age</div><div class="stat-value" id="sc-age">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon green">🏥</div><div><div class="stat-label">Departments</div><div class="stat-value" id="sc-depts">—</div></div></div>
+    </div>
+
+    <!-- ── Filter Bar ─────────────────────────────────────────────────── -->
+    <div class="filter-bar">
+      <div class="search-input-wrap" style="flex:1;min-width:200px">
+        <svg class="search-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input class="form-control" id="pt-search" type="text" placeholder="Search by name or patient ID…"/>
+      </div>
+      <select class="form-control" id="pt-dept" style="width:190px">
+        <option value="">All Departments</option>
+        <option>Cardiology</option><option>Neurology</option>
+        <option>Orthopedics</option><option>Oncology</option>
+        <option>Emergency</option><option>Pediatrics</option>
+        <option>Radiology</option><option>General Medicine</option>
+      </select>
+      <select class="form-control" id="pt-gender" style="width:130px">
+        <option value="">All Genders</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="btn-clear-pt">Clear</button>
+    </div>
+
+    <!-- ── Patient Table ──────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">All Patients</span>
+        <span id="pt-count" class="text-muted text-sm"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Patient ID</th>
+              <th>Name</th>
+              <th>Age</th>
+              <th>Gender</th>
+              <th>Blood Type</th>
+              <th>Department</th>
+              <th>Admission Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pt-tbody">
+            <tr><td colspan="8" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /page-body -->
+</div><!-- /main-content -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PATIENT DETAIL MODAL
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="pt-modal">
+  <div class="modal" style="max-width:780px">
+
+    <!-- Header -->
+    <div class="modal-header" id="pt-modal-header" style="background:linear-gradient(135deg,#0f1729,#1a3050);color:#fff;border-radius:12px 12px 0 0">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div id="pt-avatar-big" style="width:52px;height:52px;border-radius:50%;background:#1a56db;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0"></div>
+        <div>
+          <div class="modal-title" id="pt-modal-name" style="color:#fff;font-size:17px"></div>
+          <div id="pt-modal-sub" style="color:rgba(255,255,255,.6);font-size:12px;margin-top:2px"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="color:rgba(255,255,255,.7)" onclick="closeModal('pt-modal')">✕</button>
+    </div>
+
+    <!-- Body -->
+    <div class="modal-body" id="pt-modal-body" style="padding:0">
+      <div style="text-align:center;padding:40px"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('pt-modal')">Close</button>
+      <a id="pt-new-doc-btn" href="/new-document" class="btn btn-primary">+ New Document</a>
+    </div>
+  </div>
+</div>
+
+
+<div id="toast-container"></div>
+<script src="/static/js/utils.js"></script>
+<script>
+/* ── Data & colours ─────────────────────────────────────────────────────── */
+const DEPT_COLORS = {
+  "Cardiology":       { bg:"#fee2e2", text:"#9b1c1c" },
+  "Neurology":        { bg:"#ede9fe", text:"#5b21b6" },
+  "Orthopedics":      { bg:"#d1fae5", text:"#065f46" },
+  "Oncology":         { bg:"#fef3c7", text:"#92400e" },
+  "Emergency":        { bg:"#fee2e2", text:"#9b1c1c" },
+  "Pediatrics":       { bg:"#e0f2fe", text:"#0c4a6e" },
+  "Radiology":        { bg:"#ccfbf1", text:"#134e4a" },
+  "General Medicine": { bg:"#f3f4f6", text:"#374151" },
+};
+const BLOOD_COLORS = {
+  "A+":"#fee2e2","A-":"#fef3c7","B+":"#d1fae5","B-":"#e0f2fe",
+  "AB+":"#ede9fe","AB-":"#fce7f3","O+":"#d1fae5","O-":"#f3f4f6"
+};
+
+let allPatients = [];   // cached list for client-side filtering
+
+/* ── Load list ───────────────────────────────────────────────────────────── */
+async function loadPatients() {
+  const search = document.getElementById("pt-search").value.trim();
+  let url = "/api/patients";
+  if (search) url += `?search=${encodeURIComponent(search)}`;
+
+  const tbody = document.getElementById("pt-tbody");
+  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>`;
+
+  try {
+    const patients = await api("GET", url);
+    allPatients = patients;
+    applyFilters();
+  } catch(e) {
+    showToast("Failed to load patients: " + e.message, "error");
+  }
+}
+
+/* ── Client-side filter (dept + gender) ─────────────────────────────────── */
+function applyFilters() {
+  const dept   = document.getElementById("pt-dept").value;
+  const gender = document.getElementById("pt-gender").value;
+
+  let list = allPatients;
+  if (dept)   list = list.filter(p => p.department === dept);
+  if (gender) list = list.filter(p => p.gender     === gender);
+
+  renderTable(list);
+  updateSummaryCards(list);
+}
+
+function updateSummaryCards(list) {
+  const male   = list.filter(p => p.gender === "Male").length;
+  const female = list.filter(p => p.gender === "Female").length;
+  const avgAge = list.length ? Math.round(list.reduce((s,p) => s+p.age, 0) / list.length) : 0;
+  const depts  = new Set(list.map(p => p.department)).size;
+
+  document.getElementById("sc-total").textContent  = list.length;
+  document.getElementById("sc-male").textContent   = male;
+  document.getElementById("sc-female").textContent = female;
+  document.getElementById("sc-age").textContent    = avgAge ? avgAge + " yrs" : "—";
+  document.getElementById("sc-depts").textContent  = depts;
+  document.getElementById("pt-count").textContent  = `${list.length} patient(s)`;
+  document.getElementById("pt-total-badge").textContent = `${list.length} Patients`;
+}
+
+/* ── Render table rows ───────────────────────────────────────────────────── */
+function renderTable(list) {
+  const tbody = document.getElementById("pt-tbody");
+
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
+      <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+      </svg>
+      <h3>No patients found</h3>
+      <p>Try adjusting your search or filters</p>
+    </div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(p => {
+    const dc  = DEPT_COLORS[p.department] || { bg:"#f3f4f6", text:"#374151" };
+    const bc  = BLOOD_COLORS[p.blood_type] || "#f3f4f6";
+    const ini = p.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+    return `
+      <tr style="cursor:pointer" onclick="openPatient(${p.id})">
+        <td>
+          <code style="background:#f0f4ff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600">
+            ${p.patient_id}
+          </code>
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;border-radius:50%;background:#1a56db;
+                        display:flex;align-items:center;justify-content:center;
+                        color:#fff;font-size:11px;font-weight:700;flex-shrink:0">
+              ${ini}
+            </div>
+            <strong>${p.name}</strong>
+          </div>
+        </td>
+        <td>${p.age} <span class="text-muted text-sm">yrs</span></td>
+        <td>${p.gender === "Male"
+          ? `<span style="color:#1a56db;font-weight:600">♂ Male</span>`
+          : `<span style="color:#e02424;font-weight:600">♀ Female</span>`}
+        </td>
+        <td>
+          <span style="background:${bc};color:#374151;font-weight:700;font-size:12px;padding:2px 10px;border-radius:20px">
+            ${p.blood_type}
+          </span>
+        </td>
+        <td>
+          <span style="background:${dc.bg};color:${dc.text};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">
+            ${p.department}
+          </span>
+        </td>
+        <td class="text-muted text-sm">${fmtDate(p.admission_date)}</td>
+        <td>
+          <button class="btn btn-outline btn-sm"
+                  onclick="event.stopPropagation();openPatient(${p.id})">
+            View Details
+          </button>
+        </td>
+      </tr>`;
+  }).join("");
+}
+
+/* ── Open patient detail modal ───────────────────────────────────────────── */
+async function openPatient(id) {
+  openModal("pt-modal");
+
+  // Reset header & body while loading
+  document.getElementById("pt-avatar-big").textContent  = "…";
+  document.getElementById("pt-modal-name").textContent  = "Loading…";
+  document.getElementById("pt-modal-sub").textContent   = "";
+  document.getElementById("pt-modal-body").innerHTML    = `<div style="text-align:center;padding:40px"><div class="spinner"></div></div>`;
+
+  try {
+    const p = await api("GET", `/api/patients/${id}`);
+    renderPatientModal(p);
+  } catch(e) {
+    document.getElementById("pt-modal-body").innerHTML =
+      `<div class="empty-state"><h3>${e.message}</h3></div>`;
+  }
+}
+
+/* ── Render modal content ────────────────────────────────────────────────── */
+function renderPatientModal(p) {
+  const ini = p.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase();
+  const dc  = DEPT_COLORS[p.department] || { bg:"#f3f4f6", text:"#374151" };
+  const s   = p.stats;
+
+  // Header
+  document.getElementById("pt-avatar-big").textContent = ini;
+  document.getElementById("pt-modal-name").textContent = p.name;
+  document.getElementById("pt-modal-sub").textContent  =
+    `${p.patient_id}  •  ${p.age} yrs  •  ${p.gender}  •  ${p.department}`;
+
+  // Score ring colour
+  const scoreColor = !s.avg_score ? "#9ca3af"
+    : s.avg_score >= 75 ? "#0e9f6e"
+    : s.avg_score >= 50 ? "#d97706" : "#e02424";
+
+  /* ── Demographics block ── */
+  const demog = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:20px 24px;border-bottom:1px solid var(--border)">
+      <div class="detail-cell">
+        <div class="dc-label">Patient ID</div>
+        <div class="dc-value">
+          <code style="background:#f0f4ff;padding:2px 8px;border-radius:4px">${p.patient_id}</code>
+        </div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">Date of Admission</div>
+        <div class="dc-value">${fmtDate(p.admission_date)}</div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">Blood Type</div>
+        <div class="dc-value">
+          <span style="background:${BLOOD_COLORS[p.blood_type]||'#f3f4f6'};padding:2px 12px;border-radius:20px;font-weight:700">
+            ${p.blood_type}
+          </span>
+        </div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">Age</div>
+        <div class="dc-value">${p.age} years old</div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">Gender</div>
+        <div class="dc-value">${p.gender === "Male"
+          ? `<span style="color:#1a56db;font-weight:600">♂ Male</span>`
+          : `<span style="color:#e02424;font-weight:600">♀ Female</span>`}
+        </div>
+      </div>
+      <div class="detail-cell">
+        <div class="dc-label">Department</div>
+        <div class="dc-value">
+          <span style="background:${dc.bg};color:${dc.text};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600">
+            ${p.department}
+          </span>
+        </div>
+      </div>
+    </div>`;
+
+  /* ── Stats strip ── */
+  const statsStrip = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--border)">
+      ${[
+        ["Total Docs",    s.total_docs,      "#1a56db"],
+        ["Validated",     s.validated,       "#0e9f6e"],
+        ["Pending",       s.pending,         "#d97706"],
+        ["Open Issues",   s.open_issues,     s.critical_issues > 0 ? "#e02424" : "#6b7280"],
+      ].map(([label, val, col], i) => `
+        <div style="padding:14px 20px;${i < 3 ? "border-right:1px solid var(--border);" : ""}text-align:center">
+          <div style="font-size:22px;font-weight:800;color:${col}">${val}</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:500;margin-top:2px">${label}</div>
+        </div>`).join("")}
+    </div>`;
+
+  /* ── AI score ring ── */
+  const aiStrip = s.avg_score != null ? `
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 24px;background:#f9fafb;border-bottom:1px solid var(--border)">
+      <div style="position:relative;width:52px;height:52px;flex-shrink:0">
+        <svg width="52" height="52" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r="22" fill="none" stroke="#e5e7eb" stroke-width="5"/>
+          <circle cx="26" cy="26" r="22" fill="none" stroke="${scoreColor}" stroke-width="5"
+            stroke-dasharray="${(s.avg_score/100)*138.2} 138.2"
+            stroke-linecap="round"
+            transform="rotate(-90 26 26)"/>
+        </svg>
+        <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${scoreColor}">
+          ${s.avg_score}
+        </span>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600">Average AI Quality Score</div>
+        <div style="font-size:12px;color:var(--muted)">
+          Across ${s.total_docs} document(s) —
+          ${s.avg_score >= 75 ? "Overall documentation quality is good."
+            : s.avg_score >= 50 ? "Some documents need attention."
+            : "Documentation quality needs significant improvement."}
+        </div>
+      </div>
+      ${s.critical_issues > 0 ? `
+        <div style="margin-left:auto;background:#fee2e2;color:#9b1c1c;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600">
+          ⚠ ${s.critical_issues} Critical Issue${s.critical_issues > 1 ? "s" : ""}
+        </div>` : ""}
+    </div>` : "";
+
+  /* ── Document history table ── */
+  const docRows = p.documents.length
+    ? p.documents.map(d => `
+        <tr>
+          <td><strong style="color:var(--primary);font-size:12px">${d.doc_id}</strong></td>
+          <td style="font-size:12px">${d.doc_type}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${d.diagnosis}">${d.diagnosis}</td>
+          <td style="font-size:11px">${d.doctor_name}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td>${d.ai_score != null ? scoreBar(d.ai_score) : `<span class="text-muted text-sm">—</span>`}</td>
+          <td>
+            ${d.issue_count > 0
+              ? `<span class="badge ${d.critical ? "badge-critical" : "badge-medium"}">${d.issue_count} issue${d.issue_count>1?"s":""}</span>`
+              : `<span class="badge badge-validated">Clean</span>`}
+          </td>
+          <td class="text-muted text-sm" style="font-size:11px;white-space:nowrap">${fmtDate(d.created_at)}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="8"><div class="empty-state" style="padding:24px">
+        <h3 style="font-size:14px">No documents yet</h3>
+      </div></td></tr>`;
+
+  const docTable = `
+    <div style="padding:16px 24px 0">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">
+        Document History
+        <span style="color:var(--muted);font-weight:400;font-size:12px;margin-left:6px">(${p.documents.length} total)</span>
+      </div>
+      <div class="table-wrap" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+        <table>
+          <thead>
+            <tr>
+              <th>Doc ID</th><th>Type</th><th>Diagnosis</th><th>Doctor</th>
+              <th>Status</th><th>Score</th><th>Issues</th><th>Date</th>
+            </tr>
+          </thead>
+          <tbody>${docRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById("pt-modal-body").innerHTML =
+    demog + statsStrip + aiStrip + docTable
+    + `<div style="height:20px"></div>`;
+}
+
+/* ── Wire up filters ────────────────────────────────────────────────────── */
+let searchTimer;
+document.getElementById("pt-search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadPatients, 320);
+});
+document.getElementById("pt-dept").addEventListener("change",   applyFilters);
+document.getElementById("pt-gender").addEventListener("change", applyFilters);
+document.getElementById("btn-clear-pt").addEventListener("click", () => {
+  document.getElementById("pt-search").value = "";
+  document.getElementById("pt-dept").value   = "";
+  document.getElementById("pt-gender").value = "";
+  loadPatients();
+});
+
+loadPatients();
+</script>
+
+<style>
+/* Detail cell inside modal */
+.detail-cell { }
+.dc-label { font-size: 11px; color: var(--muted); font-weight: 600;
+             text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+.dc-value { font-size: 13.5px; font-weight: 500; }
+</style>
+
+</body>
+</html>

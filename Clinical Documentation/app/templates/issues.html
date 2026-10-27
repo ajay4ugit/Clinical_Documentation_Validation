@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Validation Issues — ClinDoc AI</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+{% include "_sidebar.html" %}
+
+<div class="main-content">
+  <header class="top-header">
+    <h2>Validation Issues</h2>
+    <span class="header-badge" id="open-issues-badge">Loading…</span>
+    <div class="header-user">
+      <div class="avatar">DR</div>
+      <span>Dr. Admin</span>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <select class="form-control" id="filter-resolved" style="width:170px">
+        <option value="">All Issues</option>
+        <option value="false">Open (Unresolved)</option>
+        <option value="true">Resolved</option>
+      </select>
+      <select class="form-control" id="filter-severity" style="width:150px">
+        <option value="">All Severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="btn-resolve-all">✓ Resolve All Visible</button>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="stats-grid" id="issue-stats" style="margin-bottom:16px">
+      <div class="stat-card"><div class="stat-icon red">🔴</div><div><div class="stat-label">Critical</div><div class="stat-value" id="cnt-critical">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon orange">🟠</div><div><div class="stat-label">High</div><div class="stat-value" id="cnt-high">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon blue">🔵</div><div><div class="stat-label">Medium</div><div class="stat-value" id="cnt-medium">—</div></div></div>
+      <div class="stat-card"><div class="stat-icon green">🟢</div><div><div class="stat-label">Low</div><div class="stat-value" id="cnt-low">—</div></div></div>
+    </div>
+
+    <!-- Issues Table -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Issue Log</span>
+        <span id="issue-count" class="text-muted text-sm"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Document</th><th>Patient</th>
+              <th>Issue Type</th><th>Field</th><th>Severity</th>
+              <th>Description</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="issues-tbody">
+            <tr><td colspan="9" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<script src="/static/js/utils.js"></script>
+<script>
+  let visibleIssues = [];
+
+  async function loadIssues() {
+    const resolved = document.getElementById("filter-resolved").value;
+    const severity = document.getElementById("filter-severity").value;
+    let url = "/api/issues?";
+    if (resolved !== "") url += `resolved=${resolved}&`;
+    if (severity)         url += `severity=${severity}&`;
+
+    const tbody = document.getElementById("issues-tbody");
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px"><div class="spinner"></div></td></tr>`;
+
+    try {
+      const issues = await api("GET", url);
+      visibleIssues = issues;
+      document.getElementById("issue-count").textContent = `${issues.length} issue(s)`;
+
+      // Update badge
+      const open = issues.filter(i => !i.resolved).length;
+      const badge = document.getElementById("open-issues-badge");
+      badge.textContent = `${open} Open Issues`;
+      badge.className = open > 0 ? "header-badge" : "header-badge green";
+
+      // Severity counts (all unresolved)
+      try {
+        const stats = await api("GET", "/api/stats");
+        const s = stats.by_severity;
+        document.getElementById("cnt-critical").textContent = s.critical || 0;
+        document.getElementById("cnt-high").textContent     = s.high     || 0;
+        document.getElementById("cnt-medium").textContent   = s.medium   || 0;
+        document.getElementById("cnt-low").textContent      = s.low      || 0;
+      } catch(_) {}
+
+      if (!issues.length) {
+        tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">
+          <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          </svg>
+          <h3>${resolved === "true" ? "No resolved issues yet" : "No open issues — great job! ✓"}</h3>
+        </div></td></tr>`;
+        return;
+      }
+
+      const typeIcons = {
+        drug_interaction:  "💊",
+        icd_mismatch:      "🔤",
+        missing_field:     "📝",
+        incomplete_note:   "📋",
+        date_error:        "📅",
+        missing_signature: "✍️",
+        allergy_check:     "⚠️",
+      };
+
+      tbody.innerHTML = issues.map((i, idx) => `
+        <tr>
+          <td class="text-muted text-sm">${idx + 1}</td>
+          <td><a href="/documents" style="color:var(--primary);font-weight:600">${i.doc_id}</a></td>
+          <td>${i.patient_name}</td>
+          <td>
+            <span style="display:flex;align-items:center;gap:4px">
+              <span>${typeIcons[i.issue_type] || "⚠"}</span>
+              <span style="text-transform:capitalize">${i.issue_type.replace(/_/g," ")}</span>
+            </span>
+          </td>
+          <td><code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:11px">${i.field_name}</code></td>
+          <td>${severityBadge(i.severity)}</td>
+          <td style="max-width:300px;font-size:12px;color:var(--muted)">${i.description}</td>
+          <td>${i.resolved
+            ? `<span class="badge badge-validated">Resolved</span>`
+            : `<span class="badge badge-rejected">Open</span>`}
+          </td>
+          <td>
+            ${!i.resolved
+              ? `<button class="btn btn-success btn-sm" onclick="resolveOne(${i.id})">✓ Resolve</button>`
+              : `<span class="text-muted text-sm">—</span>`}
+          </td>
+        </tr>`).join("");
+
+    } catch(e) {
+      showToast("Failed to load issues: " + e.message, "error");
+    }
+  }
+
+  async function resolveOne(id) {
+    try {
+      await api("PATCH", `/api/issues/${id}/resolve`);
+      showToast("Issue resolved ✓", "success");
+      loadIssues();
+    } catch(e) {
+      showToast("Failed: " + e.message, "error");
+    }
+  }
+
+  document.getElementById("btn-resolve-all").addEventListener("click", async () => {
+    const open = visibleIssues.filter(i => !i.resolved);
+    if (!open.length) { showToast("No open issues to resolve", "info"); return; }
+    if (!confirm(`Resolve all ${open.length} visible open issues?`)) return;
+    let done = 0;
+    for (const i of open) {
+      try { await api("PATCH", `/api/issues/${i.id}/resolve`); done++; } catch(_) {}
+    }
+    showToast(`Resolved ${done} issues`, "success");
+    loadIssues();
+  });
+
+  document.getElementById("filter-resolved").addEventListener("change",  loadIssues);
+  document.getElementById("filter-severity").addEventListener("change", loadIssues);
+
+  loadIssues();
+</script>
+</body>
+</html>

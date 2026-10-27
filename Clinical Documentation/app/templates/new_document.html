@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>New Document — ClinDoc AI</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+{% include "_sidebar.html" %}
+
+<div class="main-content">
+  <header class="top-header">
+    <h2>Create New Clinical Document</h2>
+    <div class="header-user">
+      <div class="avatar">DR</div>
+      <span>Dr. Admin</span>
+    </div>
+  </header>
+
+  <div class="page-body">
+    <div style="max-width:760px;margin:0 auto">
+
+      <!-- Progress Steps -->
+      <div style="display:flex;align-items:center;gap:0;margin-bottom:28px">
+        <div class="step-dot active" id="step1-dot">1</div>
+        <div class="step-line" id="line1"></div>
+        <div class="step-dot" id="step2-dot">2</div>
+        <div class="step-line" id="line2"></div>
+        <div class="step-dot" id="step3-dot">3</div>
+      </div>
+
+      <!-- STEP 1: Patient & Doctor -->
+      <div id="step1" class="card">
+        <div class="card-header">
+          <span class="card-title">Step 1 — Patient &amp; Doctor</span>
+          <span class="text-muted text-sm">Select patient and attending doctor</span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label class="form-label">Patient *</label>
+              <select class="form-control" id="f-patient" required>
+                <option value="">— Select patient —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Attending Doctor *</label>
+              <select class="form-control" id="f-doctor" required>
+                <option value="">— Select doctor —</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label class="form-label">Document Type *</label>
+              <select class="form-control" id="f-type" required>
+                <option value="">— Select type —</option>
+                <option>Discharge Summary</option>
+                <option>Prescription</option>
+                <option>Lab Report</option>
+                <option>Radiology Report</option>
+                <option>Surgical Note</option>
+                <option>Progress Note</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Document Title *</label>
+              <input class="form-control" id="f-title" type="text" placeholder="e.g. Discharge Summary — Chest Pain" required/>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <button class="btn btn-primary" id="btn-next1">Next Step →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Clinical Content -->
+      <div id="step2" class="card" style="display:none">
+        <div class="card-header">
+          <span class="card-title">Step 2 — Clinical Content</span>
+          <span class="text-muted text-sm">Diagnosis, medications &amp; notes</span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label class="form-label">Primary Diagnosis *</label>
+              <select class="form-control" id="f-diagnosis" required>
+                <option value="">— Select diagnosis —</option>
+                <option>Acute Myocardial Infarction</option>
+                <option>Type 2 Diabetes Mellitus</option>
+                <option>Hypertensive Heart Disease</option>
+                <option>Community-Acquired Pneumonia</option>
+                <option>Lumbar Disc Herniation</option>
+                <option>Migraine Without Aura</option>
+                <option>Breast Cancer Stage II</option>
+                <option>Acute Appendicitis</option>
+                <option>Chronic Kidney Disease Stage 3</option>
+                <option>Major Depressive Disorder</option>
+                <option>Asthma Moderate Persistent</option>
+                <option>Atrial Fibrillation</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ICD-10 Code *</label>
+              <input class="form-control" id="f-icd" type="text" placeholder="e.g. I21.9" required/>
+              <span id="icd-hint" class="text-muted text-sm"></span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Medications (comma-separated with dosages) *</label>
+            <input class="form-control" id="f-meds" type="text" placeholder="e.g. Aspirin 81mg, Metoprolol 25mg, Atorvastatin 40mg" required/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Clinical Notes *
+              <span class="text-muted text-sm">(Include: Chief Complaint, Assessment, Plan)</span>
+            </label>
+            <textarea class="form-control" id="f-content" rows="7"
+              placeholder="Chief Complaint: Patient presenting with…&#10;&#10;Assessment: Based on clinical evaluation…&#10;&#10;Plan: Initiate treatment with…" required></textarea>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <button class="btn btn-outline" id="btn-back2">← Back</button>
+            <button class="btn btn-primary" id="btn-next2">Review Document →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Review & Submit -->
+      <div id="step3" class="card" style="display:none">
+        <div class="card-header">
+          <span class="card-title">Step 3 — Review &amp; Submit</span>
+          <span class="text-muted text-sm">Verify before submitting for AI validation</span>
+        </div>
+        <div class="card-body">
+          <div id="review-content" style="background:var(--bg);border-radius:8px;padding:16px;margin-bottom:16px"></div>
+
+          <!-- Instant pre-validation check -->
+          <div id="precheck-panel" class="ai-panel" style="display:none">
+            <div class="ai-panel-title">⚡ Pre-Submission Check</div>
+            <div id="precheck-items"></div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;margin-top:16px">
+            <button class="btn btn-outline" id="btn-back3">← Back</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" id="btn-submit">
+                📤 Submit &amp; Validate
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success Panel -->
+      <div id="success-panel" class="card" style="display:none;text-align:center;padding:40px">
+        <div style="font-size:56px;margin-bottom:12px">🎉</div>
+        <h2 style="font-size:20px;margin-bottom:8px">Document Created Successfully!</h2>
+        <p class="text-muted" id="success-msg">Your document has been validated by AI.</p>
+        <div id="success-score" style="margin:16px 0"></div>
+        <div id="success-issues" style="margin-bottom:20px;text-align:left;max-width:400px;margin-left:auto;margin-right:auto"></div>
+        <div style="display:flex;justify-content:center;gap:12px">
+          <a href="/documents" class="btn btn-primary">View All Documents</a>
+          <a href="/new-document" class="btn btn-outline" onclick="location.reload(); return false;">+ Create Another</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<style>
+.step-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--border); color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+  transition: background .3s, color .3s;
+}
+.step-dot.active  { background: var(--primary);   color: #fff; }
+.step-dot.done    { background: var(--secondary);  color: #fff; }
+.step-line {
+  flex: 1; height: 2px; background: var(--border);
+  transition: background .3s;
+}
+.step-line.done { background: var(--secondary); }
+</style>
+
+<script src="/static/js/utils.js"></script>
+<script>
+  const ICD_MAP = {
+    "Acute Myocardial Infarction":         "I21.9",
+    "Type 2 Diabetes Mellitus":            "E11.9",
+    "Hypertensive Heart Disease":          "I11.9",
+    "Community-Acquired Pneumonia":        "J18.9",
+    "Lumbar Disc Herniation":              "M51.1",
+    "Migraine Without Aura":               "G43.0",
+    "Breast Cancer Stage II":              "C50.9",
+    "Acute Appendicitis":                  "K37",
+    "Chronic Kidney Disease Stage 3":      "N18.3",
+    "Major Depressive Disorder":           "F32.1",
+    "Asthma Moderate Persistent":          "J45.1",
+    "Atrial Fibrillation":                 "I48.91",
+  };
+
+  const MED_MAP = {
+    "Acute Myocardial Infarction":         "Aspirin 81mg, Metoprolol 25mg, Atorvastatin 40mg",
+    "Type 2 Diabetes Mellitus":            "Metformin 500mg, Glipizide 5mg",
+    "Hypertensive Heart Disease":          "Lisinopril 10mg, Amlodipine 5mg",
+    "Community-Acquired Pneumonia":        "Amoxicillin 500mg, Azithromycin 250mg",
+    "Lumbar Disc Herniation":              "Ibuprofen 400mg, Cyclobenzaprine 5mg",
+    "Migraine Without Aura":               "Sumatriptan 50mg, Topiramate 25mg",
+    "Breast Cancer Stage II":              "Tamoxifen 20mg, Letrozole 2.5mg",
+    "Acute Appendicitis":                  "Ceftriaxone 1g IV, Metronidazole 500mg",
+    "Chronic Kidney Disease Stage 3":      "Furosemide 40mg, Sodium Bicarbonate 650mg",
+    "Major Depressive Disorder":           "Sertraline 50mg, Lorazepam 0.5mg",
+    "Asthma Moderate Persistent":          "Salbutamol inhaler, Budesonide 200mcg",
+    "Atrial Fibrillation":                 "Warfarin 5mg, Digoxin 0.125mg",
+  };
+
+  // Load dropdowns
+  async function loadDropdowns() {
+    const [patients, doctors] = await Promise.all([
+      api("GET", "/api/patients"), api("GET", "/api/doctors")
+    ]);
+    const ptSel = document.getElementById("f-patient");
+    patients.forEach(p => {
+      const o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = `${p.patient_id} — ${p.name} (${p.department})`;
+      ptSel.appendChild(o);
+    });
+    const drSel = document.getElementById("f-doctor");
+    doctors.forEach(d => {
+      const o = document.createElement("option");
+      o.value = d.id;
+      o.textContent = `${d.name} — ${d.specialization}`;
+      drSel.appendChild(o);
+    });
+  }
+
+  // Auto-fill ICD and meds on diagnosis selection
+  document.getElementById("f-diagnosis").addEventListener("change", function() {
+    const diag = this.value;
+    if (ICD_MAP[diag]) document.getElementById("f-icd").value  = ICD_MAP[diag];
+    if (MED_MAP[diag]) document.getElementById("f-meds").value = MED_MAP[diag];
+  });
+
+  // Step navigation
+  function goToStep(n) {
+    [1,2,3].forEach(s => {
+      document.getElementById(`step${s}`).style.display = (s === n) ? "block" : "none";
+      const dot = document.getElementById(`step${s}-dot`);
+      dot.className = s < n ? "step-dot done" : s === n ? "step-dot active" : "step-dot";
+    });
+    [1,2].forEach(l => {
+      const line = document.getElementById(`line${l}`);
+      line.className = l < n ? "step-line done" : "step-line";
+    });
+  }
+
+  document.getElementById("btn-next1").addEventListener("click", () => {
+    const patient = document.getElementById("f-patient").value;
+    const doctor  = document.getElementById("f-doctor").value;
+    const type    = document.getElementById("f-type").value;
+    const title   = document.getElementById("f-title").value.trim();
+    if (!patient || !doctor || !type || !title) {
+      showToast("Please fill all fields in Step 1", "warning"); return;
+    }
+    goToStep(2);
+  });
+
+  document.getElementById("btn-back2").addEventListener("click", () => goToStep(1));
+
+  document.getElementById("btn-next2").addEventListener("click", () => {
+    const diag    = document.getElementById("f-diagnosis").value;
+    const icd     = document.getElementById("f-icd").value.trim();
+    const meds    = document.getElementById("f-meds").value.trim();
+    const content = document.getElementById("f-content").value.trim();
+    if (!diag || !icd || !meds || !content) {
+      showToast("Please fill all fields in Step 2", "warning"); return;
+    }
+
+    // Build review
+    const ptOpt = document.getElementById("f-patient").selectedOptions[0].textContent;
+    const drOpt = document.getElementById("f-doctor").selectedOptions[0].textContent;
+    document.getElementById("review-content").innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><div class="text-muted text-sm">Patient</div><strong>${ptOpt}</strong></div>
+        <div><div class="text-muted text-sm">Doctor</div><strong>${drOpt}</strong></div>
+        <div><div class="text-muted text-sm">Type</div>${document.getElementById("f-type").value}</div>
+        <div><div class="text-muted text-sm">ICD-10</div><code style="background:#f0f4ff;padding:2px 6px;border-radius:4px">${icd}</code></div>
+      </div>
+      <div style="margin-bottom:8px"><div class="text-muted text-sm">Title</div><strong>${document.getElementById("f-title").value}</strong></div>
+      <div style="margin-bottom:8px"><div class="text-muted text-sm">Diagnosis</div>${diag}</div>
+      <div style="margin-bottom:8px"><div class="text-muted text-sm">Medications</div>${meds}</div>
+      <div><div class="text-muted text-sm">Clinical Notes</div>
+        <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:13px;white-space:pre-wrap;max-height:120px;overflow-y:auto;margin-top:4px">${content}</div>
+      </div>`;
+
+    // Pre-check
+    const checks = [];
+    if (!content.toLowerCase().includes("assessment"))
+      checks.push({ok:false, msg:"Assessment section missing from notes"});
+    if (!content.toLowerCase().includes("plan"))
+      checks.push({ok:false, msg:"Plan section missing from notes"});
+    if (!meds.match(/\d+\s?(mg|mcg|ml|g|iu)/i))
+      checks.push({ok:false, msg:"Medication dosages not specified"});
+    if (ICD_MAP[diag] && icd !== ICD_MAP[diag])
+      checks.push({ok:false, msg:`ICD code may not match diagnosis (expected: ${ICD_MAP[diag]})`});
+
+    if (checks.length) {
+      document.getElementById("precheck-panel").style.display = "block";
+      document.getElementById("precheck-items").innerHTML = checks.map(c =>
+        `<div style="display:flex;gap:8px;padding:4px 0">
+          <span style="color:${c.ok ? "#0e9f6e":"#e02424"}">${c.ok?"✓":"⚠"}</span>
+          <span style="font-size:13px">${c.msg}</span>
+        </div>`).join("") + `<div style="font-size:12px;color:var(--muted);margin-top:6px">These will be flagged during AI validation. You can still submit.</div>`;
+    } else {
+      document.getElementById("precheck-panel").style.display = "none";
+    }
+
+    goToStep(3);
+  });
+
+  document.getElementById("btn-back3").addEventListener("click", () => goToStep(2));
+
+  document.getElementById("btn-submit").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-submit");
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spinner" style="width:14px;height:14px;border-color:rgba(255,255,255,.3);border-top-color:#fff"></div> Submitting…`;
+
+    const payload = {
+      patient_id:  parseInt(document.getElementById("f-patient").value),
+      doctor_id:   parseInt(document.getElementById("f-doctor").value),
+      doc_type:    document.getElementById("f-type").value,
+      title:       document.getElementById("f-title").value,
+      content:     document.getElementById("f-content").value,
+      diagnosis:   document.getElementById("f-diagnosis").value,
+      icd_codes:   document.getElementById("f-icd").value,
+      medications: document.getElementById("f-meds").value,
+    };
+
+    try {
+      const doc = await api("POST", "/api/documents", payload);
+      // Auto-run validation
+      btn.innerHTML = `<div class="spinner" style="width:14px;height:14px;border-color:rgba(255,255,255,.3);border-top-color:#fff"></div> Running AI Validation…`;
+      const validated = await api("POST", `/api/documents/${doc.id}/validate`);
+
+      // Show success
+      document.getElementById("step3").style.display = "none";
+      const panel = document.getElementById("success-panel");
+      panel.style.display = "block";
+      document.getElementById("success-msg").textContent = `Document ${validated.doc_id} created and validated by ${validated.engine || "AI engine"}.`;
+      document.getElementById("success-score").innerHTML = scoreBar(validated.ai_score);
+
+      if (validated.issues && validated.issues.length) {
+        document.getElementById("success-issues").innerHTML = `
+          <div class="form-label" style="margin-bottom:8px">${validated.issues.length} issue(s) found during validation:</div>
+          ${validated.issues.map(i => `
+            <div style="display:flex;gap:8px;padding:4px 0">${severityBadge(i.severity)}<span style="font-size:12px">${i.description}</span></div>
+          `).join("")}`;
+      }
+
+    } catch(e) {
+      showToast("Submission failed: " + e.message, "error");
+      btn.disabled = false;
+      btn.innerHTML = "📤 Submit &amp; Validate";
+    }
+  });
+
+  loadDropdowns();
+  goToStep(1);
+</script>
+</body>
+</html>

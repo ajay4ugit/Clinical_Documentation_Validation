@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — ClinDoc AI</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+{% include "_sidebar.html" %}
+
+<div class="main-content">
+  <!-- Header -->
+  <header class="top-header">
+    <h2>Clinical Documentation Dashboard</h2>
+    <span class="header-badge blue" id="ai-engine-badge">🤖 AI Engine: Loading…</span>
+    <div class="header-user">
+      <div class="avatar">DR</div>
+      <span>Dr. Admin</span>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- ── Stat Cards ───────────────────────────────────────────────── -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-icon blue">📄</div><div><div class="stat-label">Total Documents</div><div class="stat-value" id="s-total">—</div><div class="stat-sub">All clinical records</div></div></div>
+      <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-label">Validated</div><div class="stat-value" id="s-validated">—</div><div class="stat-sub">Passed AI review</div></div></div>
+      <div class="stat-card"><div class="stat-icon orange">⏳</div><div><div class="stat-label">Pending Review</div><div class="stat-value" id="s-pending">—</div><div class="stat-sub">Awaiting validation</div></div></div>
+      <div class="stat-card"><div class="stat-icon red">❌</div><div><div class="stat-label">Rejected</div><div class="stat-value" id="s-rejected">—</div><div class="stat-sub">Need correction</div></div></div>
+      <div class="stat-card"><div class="stat-icon teal">🏥</div><div><div class="stat-label">Patients</div><div class="stat-value" id="s-patients">—</div><div class="stat-sub">Registered patients</div></div></div>
+      <div class="stat-card"><div class="stat-icon purple">⚠️</div><div><div class="stat-label">Open Issues</div><div class="stat-value" id="s-issues">—</div><div class="stat-sub">Unresolved flags</div></div></div>
+    </div>
+
+    <!-- ── Average Score Banner ─────────────────────────────────────── -->
+    <div class="card mb-4" style="padding:16px 24px; display:flex; align-items:center; gap:20px; background: linear-gradient(135deg,#1a56db,#1340a8); color:#fff; border:none;">
+      <div style="font-size:42px; font-weight:800;" id="avg-score-big">—</div>
+      <div>
+        <div style="font-size:15px; font-weight:600;">Average AI Quality Score</div>
+        <div style="font-size:13px; opacity:.8;">Across all scored documents</div>
+        <div id="score-bar-banner" style="margin-top:8px; width:200px; height:6px; background:rgba(255,255,255,.3); border-radius:4px; overflow:hidden;">
+          <div id="score-fill-banner" style="height:100%; background:#0e9f6e; width:0%; transition:width .8s ease; border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="margin-left:auto; text-align:right;">
+        <a href="/new-document" class="btn" style="background:rgba(255,255,255,.15); color:#fff; border-color:rgba(255,255,255,.3)">+ New Document</a>
+      </div>
+    </div>
+
+    <!-- ── Charts Row ────────────────────────────────────────────────── -->
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Document Status Distribution</span></div>
+        <div class="card-body"><div class="chart-canvas-wrap"><canvas id="statusChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Quality Score Distribution</span></div>
+        <div class="card-body"><div class="chart-canvas-wrap"><canvas id="scoreChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Documents by Department</span></div>
+        <div class="card-body"><div class="chart-canvas-wrap"><canvas id="deptChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Issues by Severity</span></div>
+        <div class="card-body"><div class="chart-canvas-wrap"><canvas id="severityChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- ── Recent Documents Table ───────────────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Recent Documents</span>
+        <a href="/documents" class="btn btn-outline btn-sm">View All →</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Doc ID</th><th>Patient</th><th>Type</th>
+              <th>Diagnosis</th><th>Status</th><th>AI Score</th><th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="recent-docs-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:24px"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /page-body -->
+</div><!-- /main-content -->
+
+<div id="toast-container"></div>
+
+<script src="/static/js/utils.js"></script>
+<script>
+  let statusChart, scoreChart, deptChart, severityChart;
+
+  async function loadDashboard() {
+    try {
+      const stats = await api("GET", "/api/stats");
+      // Stat cards
+      document.getElementById("s-total").textContent     = stats.totals.documents;
+      document.getElementById("s-validated").textContent = stats.status.validated;
+      document.getElementById("s-pending").textContent   = stats.status.pending;
+      document.getElementById("s-rejected").textContent  = stats.status.rejected;
+      document.getElementById("s-patients").textContent  = stats.totals.patients;
+      document.getElementById("s-issues").textContent    = stats.totals.issues;
+
+      // Average score
+      document.getElementById("avg-score-big").textContent = stats.avg_score;
+      document.getElementById("score-fill-banner").style.width = stats.avg_score + "%";
+
+      buildCharts(stats);
+    } catch(e) {
+      showToast("Failed to load dashboard stats: " + e.message, "error");
+    }
+
+    // Recent docs
+    try {
+      const docs = await api("GET", "/api/documents?per_page=8");
+      const tbody = document.getElementById("recent-docs-tbody");
+      if (!docs.data.length) {
+        tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><h3>No documents found</h3></div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = docs.data.map(d => `
+        <tr>
+          <td><a href="/documents" style="color:var(--primary);font-weight:600">${d.doc_id}</a></td>
+          <td>${d.patient_name}</td>
+          <td><span class="text-muted">${d.doc_type}</span></td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.diagnosis}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td>${scoreBar(d.ai_score)}</td>
+          <td class="text-muted text-sm">${fmtDate(d.created_at)}</td>
+        </tr>`).join("");
+      document.getElementById("ai-engine-badge").textContent = "🤖 AI Engine: IBM Granite (Rule-based fallback)";
+    } catch(e) {
+      showToast("Failed to load recent documents", "error");
+    }
+  }
+
+  function buildCharts(stats) {
+    const chartDefaults = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 11 } } } }
+    };
+
+    // Status doughnut
+    statusChart = new Chart(document.getElementById("statusChart"), {
+      type: "doughnut",
+      data: {
+        labels: ["Validated", "Pending", "Review", "Rejected"],
+        datasets: [{
+          data: [stats.status.validated, stats.status.pending, stats.status.review, stats.status.rejected],
+          backgroundColor: ["#0e9f6e","#d97706","#0694a2","#e02424"],
+          borderWidth: 2,
+        }]
+      },
+      options: { ...chartDefaults, cutout: "65%" }
+    });
+
+    // Score distribution bar
+    const sd = stats.score_dist;
+    scoreChart = new Chart(document.getElementById("scoreChart"), {
+      type: "bar",
+      data: {
+        labels: Object.keys(sd),
+        datasets: [{
+          label: "Documents",
+          data: Object.values(sd),
+          backgroundColor: ["#0e9f6e","#1a56db","#d97706","#e02424"],
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        ...chartDefaults,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, grid: { color: "#f0f0f0" } } }
+      }
+    });
+
+    // Dept horizontal bar
+    const depts = stats.by_dept.slice(0, 8);
+    deptChart = new Chart(document.getElementById("deptChart"), {
+      type: "bar",
+      data: {
+        labels: depts.map(d => d.department),
+        datasets: [{
+          label: "Documents",
+          data: depts.map(d => d.count),
+          backgroundColor: "#1a56db",
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        ...chartDefaults,
+        indexAxis: "y",
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, grid: { color: "#f0f0f0" } } }
+      }
+    });
+
+    // Severity pie
+    const sev = stats.by_severity;
+    severityChart = new Chart(document.getElementById("severityChart"), {
+      type: "doughnut",
+      data: {
+        labels: ["Critical", "High", "Medium", "Low"],
+        datasets: [{
+          data: [sev.critical||0, sev.high||0, sev.medium||0, sev.low||0],
+          backgroundColor: ["#e02424","#d97706","#0694a2","#0e9f6e"],
+          borderWidth: 2,
+        }]
+      },
+      options: { ...chartDefaults, cutout: "60%" }
+    });
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>
